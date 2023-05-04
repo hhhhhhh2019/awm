@@ -8,12 +8,19 @@
 #define MAXLEN 256
 
 
+extern int top_gap;
+extern int bottom_gap;
+extern int left_gap;
+extern int right_gap;
+
+
 typedef struct {
 	xcb_connection_t* dpy;
 	int screen_id;
 	xcb_screen_t* screen;
 
-	xcb_window_t* managed_windows;
+	xcb_window_t* normal_windows;
+	xcb_window_t* dock_windows;
 
 	char running;
 } wm_t;
@@ -44,7 +51,10 @@ typedef struct {
 
 
 void wm_init(wm_t*);
-void wm_end(wm_t*);
+void wm_end(wm_t);
+
+void update_gaps(wm_t);
+void update_configs(wm_t);
 
 
 #endif // WM_H
