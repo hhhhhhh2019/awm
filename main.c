@@ -1,6 +1,7 @@
 #include <main.h>
 #include <wm.h>
 #include <vector.h>
+#include <ewmh.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,8 +12,8 @@ wm_t wm;
 
 
 
-#define WINDOW_WIDTH           720
-#define WINDOW_HEIGHT          1280
+#define WINDOW_WIDTH		   720
+#define WINDOW_HEIGHT		  1280
 
 
 
@@ -36,6 +37,7 @@ void focus(xcb_drawable_t);
 
 int main() {
 	wm_init(&wm);
+	ewmh_init();
 	loop();
 	wm_end(&wm);
 }
@@ -52,13 +54,13 @@ void loop() {
 					break;
 				case XCB_CREATE_NOTIFY:
 					printf("create\n");
-					ev_create((xcb_create_notify_event_t*)ev);
 					break;
 				case XCB_DESTROY_NOTIFY:
 					printf("destory\n");
 					break;
 				case XCB_CONFIGURE_REQUEST:
 					printf("configure requset\n");
+					ev_create((xcb_create_notify_event_t*)ev);
 					ev_configure_request((xcb_configure_request_event_t*)ev);
 					break;
 				case XCB_CONFIGURE_NOTIFY:
@@ -99,45 +101,63 @@ void ev_map_request(xcb_map_request_event_t* ev) {
 }
 
 void ev_configure_request(xcb_configure_request_event_t* ev) {
-	unsigned int mask =
-		XCB_CONFIG_WINDOW_X      |
-		XCB_CONFIG_WINDOW_Y      |
-		XCB_CONFIG_WINDOW_WIDTH  |
-		XCB_CONFIG_WINDOW_HEIGHT
-	;
+	xcb_atom_t type = 0;
 
-	unsigned int value[4] = {
-		0,
-		0,
-		720,
-		1280
-	};
+	xcb_get_property_cookie_t prop_cookie = xcb_get_property(wm.dpy, 0, ev->window, ewmh->_NET_WM_WINDOW_TYPE, XCB_ATOM_ATOM, 0, ~0);
+	xcb_get_property_reply_t *prop_reply = xcb_get_property_reply(wm.dpy, prop_cookie, NULL);
 
-	xcb_configure_window(wm.dpy, ev->window, mask, value);
+	if (prop_reply) {
+		type = ((xcb_atom_t*)xcb_get_property_value(prop_reply))[0];
+
+		free(prop_reply);
+	}
 
 
-	xcb_configure_notify_event_t resp;
+	printf("%d\n", type);
 
-	resp.response_type = XCB_CONFIGURE_NOTIFY;
-	resp.event = ev->window;
-	resp.window = ev->window;
-	resp.x = value[0];
-	resp.y = value[1];
-	resp.width = value[2];
-	resp.height = value[3];
-	resp.border_width = 0;
-	resp.override_redirect = 0;
 
-	xcb_send_event(wm.dpy, 0, ev->window, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*)&resp);
+	if (type == 0 || type == ewmh->_NET_WM_WINDOW_TYPE_NORMAL) {
+		unsigned int mask =
+			XCB_CONFIG_WINDOW_X	  |
+			XCB_CONFIG_WINDOW_Y	  |
+			XCB_CONFIG_WINDOW_WIDTH  |
+			XCB_CONFIG_WINDOW_HEIGHT
+		;
+
+		unsigned int value[4] = {
+			0,
+			0,
+			720,
+			1280
+		};
+
+		xcb_configure_window(wm.dpy, ev->window, mask, value);
+
+
+		xcb_configure_notify_event_t resp;
+
+		resp.response_type = XCB_CONFIGURE_NOTIFY;
+		resp.event = ev->window;
+		resp.window = ev->window;
+		resp.x = value[0];
+		resp.y = value[1];
+		resp.width = value[2];
+		resp.height = value[3];
+		resp.border_width = 0;
+		resp.override_redirect = 0;
+
+		xcb_send_event(wm.dpy, 0, ev->window, XCB_EVENT_MASK_STRUCTURE_NOTIFY, (char*)&resp);
+	} else {
+		xcb_get_geometry_cookie_t geom_cookie = xcb_get_geometry(wm.dpy, ev->window);
+		xcb_get_geometry_reply_t* geom_reply = xcb_get_geometry_reply(wm.dpy, geom_cookie, NULL);
+
+		printf("x: %d, y: %d, width: %d, height: %d\n", geom_reply->x, geom_reply->y, geom_reply->width, geom_reply->height);
+	}
 }
 
 
 void ev_create(xcb_create_notify_event_t* ev) {
-	xcb_generic_error_t* err;
-	xcb_get_window_attributes_cookie_t cookie = xcb_get_window_attributes(wm.dpy, ev->window);
-	xcb_get_window_attributes_reply_t* info = xcb_get_window_attributes_reply(wm.dpy, cookie, &err);
-
-	printf("\tbit_gravity: %d\n\twin_gravity: %d\n", info->bit_gravity, info->win_gravity);
+	//printf("%s\n", get_window_property(ev->window, "_NET_WM_WINDOW_TYPE"));
 }
 
 
